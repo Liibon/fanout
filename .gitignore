@@ -1,0 +1,9 @@
+*.exe
+*.dll
+*.so
+*.dylib
+/bin/
+*.test
+*.out
+go.work
+.docker/
