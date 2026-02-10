@@ -1,0 +1,38 @@
+package main
+
+import (
+	"context"
+
+	pb "github.com/liibon/fanout/gen/hdsearchv1"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+)
+
+type leafClient struct {
+	addr   string
+	client pb.HDSearchClient
+}
+
+func dialLeaves(addrs []string) ([]*leafClient, error) {
+	clients := make([]*leafClient, 0, len(addrs))
+	for _, addr := range addrs {
+		conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			return nil, err
+		}
+		clients = append(clients, &leafClient{addr: addr, client: pb.NewHDSearchClient(conn)})
+	}
+	return clients, nil
+}
+
+func fanOut(ctx context.Context, leaves []*leafClient, req *pb.SearchRequest) ([]*pb.SearchResult, error) {
+	var all []*pb.SearchResult
+	for _, lc := range leaves {
+		resp, err := lc.client.Search(ctx, req)
+		if err != nil {
+			continue
+		}
+		all = append(all, resp.Results...)
+	}
+	return all, nil
+}
