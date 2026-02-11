@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"sync"
 
 	pb "github.com/liibon/fanout/gen/hdsearchv1"
 	"google.golang.org/grpc"
@@ -25,14 +26,34 @@ func dialLeaves(addrs []string) ([]*leafClient, error) {
 	return clients, nil
 }
 
+type leafResult struct {
+	results []*pb.SearchResult
+	err     error
+}
+
 func fanOut(ctx context.Context, leaves []*leafClient, req *pb.SearchRequest) ([]*pb.SearchResult, error) {
-	var all []*pb.SearchResult
+	ch := make(chan leafResult, len(leaves))
+	var wg sync.WaitGroup
 	for _, lc := range leaves {
-		resp, err := lc.client.Search(ctx, req)
-		if err != nil {
+		wg.Add(1)
+		go func(lc *leafClient) {
+			defer wg.Done()
+			resp, err := lc.client.Search(ctx, req)
+			if err != nil {
+				ch <- leafResult{err: err}
+				return
+			}
+			ch <- leafResult{results: resp.Results}
+		}(lc)
+	}
+	go func() { wg.Wait(); close(ch) }()
+
+	var all []*pb.SearchResult
+	for r := range ch {
+		if r.err != nil {
 			continue
 		}
-		all = append(all, resp.Results...)
+		all = append(all, r.results...)
 	}
 	return all, nil
 }
