@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"sync"
+	"time"
 
 	pb "github.com/liibon/fanout/gen/hdsearchv1"
 	"google.golang.org/grpc"
@@ -31,14 +32,16 @@ type leafResult struct {
 	err     error
 }
 
-func fanOut(ctx context.Context, leaves []*leafClient, req *pb.SearchRequest) ([]*pb.SearchResult, error) {
+func fanOut(ctx context.Context, leaves []*leafClient, req *pb.SearchRequest, deadline time.Duration) ([]*pb.SearchResult, error) {
 	ch := make(chan leafResult, len(leaves))
 	var wg sync.WaitGroup
 	for _, lc := range leaves {
 		wg.Add(1)
 		go func(lc *leafClient) {
 			defer wg.Done()
-			resp, err := lc.client.Search(ctx, req)
+			lctx, cancel := context.WithTimeout(ctx, deadline)
+			defer cancel()
+			resp, err := lc.client.Search(lctx, req)
 			if err != nil {
 				ch <- leafResult{err: err}
 				return
