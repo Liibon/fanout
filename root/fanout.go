@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 
@@ -58,5 +59,15 @@ func fanOut(ctx context.Context, leaves []*leafClient, req *pb.SearchRequest, de
 		}
 		all = append(all, r.results...)
 	}
-	return all, nil
+	return topK(all, int(req.TopK)), nil
+}
+
+func topK(results []*pb.SearchResult, k int) []*pb.SearchResult {
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Distance < results[j].Distance
+	})
+	if k > len(results) {
+		k = len(results)
+	}
+	return results[:k]
 }
