@@ -3,26 +3,29 @@ package main
 import (
 	"log"
 	"net"
-	"strings"
 
 	pb "github.com/liibon/fanout/gen/hdsearchv1"
 	"google.golang.org/grpc"
 )
 
 func main() {
-	addrs := strings.Split("leaf-0:50051,leaf-1:50051,leaf-2:50051,leaf-3:50051", ",")
-	leaves, err := dialLeaves(addrs)
+	cfg, err := configFromEnv()
+	if err != nil {
+		log.Fatalf("config: %v", err)
+	}
+	leaves, err := dialLeaves(cfg.LeafAddrs)
 	if err != nil {
 		log.Fatalf("dial leaves: %v", err)
 	}
+	log.Printf("connected to %d leaves", len(leaves))
 
-	lis, err := net.Listen("tcp", ":50051")
+	lis, err := net.Listen("tcp", cfg.ListenAddr)
 	if err != nil {
 		log.Fatalf("listen: %v", err)
 	}
 	srv := grpc.NewServer()
-	pb.RegisterHDSearchServer(srv, &hdSearchServer{leaves: leaves})
-	log.Printf("root listening on :50051")
+	pb.RegisterHDSearchServer(srv, &hdSearchServer{cfg: cfg, leaves: leaves})
+	log.Printf("root listening on %s (fan-out=%d, top-k=%d)", cfg.ListenAddr, cfg.FanOut, cfg.TopK)
 	if err := srv.Serve(lis); err != nil {
 		log.Fatalf("serve: %v", err)
 	}
