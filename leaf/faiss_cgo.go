@@ -11,8 +11,11 @@ package main
 */
 import "C"
 import (
+	"encoding/binary"
 	"fmt"
+	"io"
 	"log"
+	"os"
 	"unsafe"
 )
 
@@ -22,14 +25,33 @@ type faissIndex struct {
 }
 
 func NewFaissIndex(cfg *Config) (Index, error) {
-	log.Printf("leaf %d: FAISS mode, dim=%d", cfg.LeafID, cfg.Dim)
+	f, err := os.Open(cfg.DatasetPath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	var hdr [8]byte
+	if _, err := io.ReadFull(f, hdr[:]); err != nil {
+		return nil, fmt.Errorf("read header: %w", err)
+	}
+	n := int(binary.LittleEndian.Uint32(hdr[:4]))
+	dim := int(binary.LittleEndian.Uint32(hdr[4:]))
+	if dim != cfg.Dim {
+		return nil, fmt.Errorf("dataset dim=%d, expected %d", dim, cfg.Dim)
+	}
+	if n != cfg.NumVectors {
+		return nil, fmt.Errorf("dataset n=%d, expected %d", n, cfg.NumVectors)
+	}
+	log.Printf("leaf %d: dataset ok (n=%d dim=%d)", cfg.LeafID, n, dim)
+
 	var idx *C.FaissIndexFlatL2
-	rc := C.faiss_IndexFlatL2_new_with(&idx, C.idx_t(cfg.Dim))
+	rc := C.faiss_IndexFlatL2_new_with(&idx, C.idx_t(dim))
 	if rc != 0 {
 		return nil, fmt.Errorf("faiss_IndexFlatL2_new_with returned %d", rc)
 	}
 	_ = unsafe.Pointer(idx)
-	return &faissIndex{idx: idx, dim: cfg.Dim}, nil
+	return &faissIndex{idx: idx, dim: dim}, nil
 }
 
 func (fi *faissIndex) Search(query []float32, k int) ([]int64, []float32, error) {
