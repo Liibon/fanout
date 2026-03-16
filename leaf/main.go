@@ -13,6 +13,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("config: %v", err)
 	}
+
+	log.Printf("leaf %d: FAISS mode", cfg.LeafID)
 	idx, err := NewFaissIndex(cfg)
 	if err != nil {
 		log.Fatalf("index: %v", err)
