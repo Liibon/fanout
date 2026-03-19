@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"log"
 	"sort"
 	"sync"
 	"time"
@@ -62,10 +63,17 @@ func fanOut(ctx context.Context, leaves []*leafClient, req *pb.SearchRequest, cf
 	go func() { wg.Wait(); close(ch) }()
 
 	var all []*pb.SearchResult
+	errCount := 0
 	for r := range ch {
-		if r.err == nil {
-			all = append(all, r.results...)
+		if r.err != nil {
+			errCount++
+			log.Printf("leaf %s: %v (req=%s)", r.leaf, r.err, req.RequestId)
+			continue
 		}
+		all = append(all, r.results...)
+	}
+	if errCount > 0 {
+		log.Printf("fanout: %d/%d errors (req=%s)", errCount, len(leaves), req.RequestId)
 	}
 	return topK(all, int(req.TopK)), nil
 }
