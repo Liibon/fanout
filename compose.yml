@@ -1,0 +1,19 @@
+services:
+  dataset-gen:
+    build: { context: ., dockerfile: dataset/Dockerfile }
+    command: ["-n=1000000", "-dim=128", "-seed=42", "-out=/data/dataset.bin"]
+    volumes: [dataset:/data]
+
+  leaf-0: { build: { context: ., dockerfile: leaf/Dockerfile }, environment: [LEAF_ID=0, DATASET_PATH=/data/dataset.bin], volumes: [dataset:/data] }
+  leaf-1: { build: { context: ., dockerfile: leaf/Dockerfile }, environment: [LEAF_ID=1, DATASET_PATH=/data/dataset.bin], volumes: [dataset:/data] }
+  leaf-2: { build: { context: ., dockerfile: leaf/Dockerfile }, environment: [LEAF_ID=2, DATASET_PATH=/data/dataset.bin], volumes: [dataset:/data] }
+  leaf-3: { build: { context: ., dockerfile: leaf/Dockerfile }, environment: [LEAF_ID=3, DATASET_PATH=/data/dataset.bin], volumes: [dataset:/data] }
+
+  root:
+    build: { context: ., dockerfile: root/Dockerfile }
+    environment: [LEAF_ADDRS=leaf-0:50051,leaf-1:50051,leaf-2:50051,leaf-3:50051, FAN_OUT=4]
+    ports: ["50051:50051"]
+    depends_on: [leaf-0,leaf-1,leaf-2,leaf-3]
+
+volumes:
+  dataset:
