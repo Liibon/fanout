@@ -33,6 +33,7 @@ services:
       - FAN_OUT=16
       - TOP_K=10
       - PER_LEAF_TIMEOUT_MS=100
+    restart: unless-stopped
     ports: ["50051:50051"]
     depends_on: [leaf-0,leaf-1,leaf-2,leaf-3,leaf-4,leaf-5,leaf-6,leaf-7,leaf-8,leaf-9,leaf-10,leaf-11,leaf-12,leaf-13,leaf-14,leaf-15]
 
