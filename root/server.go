@@ -5,24 +5,40 @@ import (
 	"time"
 
 	pb "github.com/liibon/fanout/gen/hdsearchv1"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type hdSearchServer struct {
 	pb.UnimplementedHDSearchServer
 	cfg    *Config
 	leaves []*leafClient
+	tracer trace.Tracer
 }
 
 func (s *hdSearchServer) Search(ctx context.Context, req *pb.SearchRequest) (*pb.SearchResponse, error) {
 	start := time.Now()
+
+	ctx, span := s.tracer.Start(ctx, "root.Search",
+		trace.WithAttributes(
+			attribute.String("request_id", req.RequestId),
+			attribute.Int("top_k", int(req.TopK)),
+			attribute.Int("fan_out", s.cfg.FanOut),
+		))
+	defer span.End()
+
 	leaves := s.leaves[:s.cfg.FanOut]
-	results, err := fanOut(ctx, leaves, req, s.cfg.PerLeafTimeout)
+	results, err := fanOut(ctx, s.tracer, leaves, req, s.cfg)
+
+	elapsed := time.Since(start)
+
 	if err != nil {
 		return nil, err
 	}
+
 	return &pb.SearchResponse{
 		Results:        results,
 		RespondingLeaf: "root",
-		LatencyUs:      time.Since(start).Microseconds(),
+		LatencyUs:      elapsed.Microseconds(),
 	}, nil
 }

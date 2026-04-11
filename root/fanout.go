@@ -8,6 +8,8 @@ import (
 	"time"
 
 	pb "github.com/liibon/fanout/gen/hdsearchv1"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -36,7 +38,11 @@ type leafResult struct {
 	latency time.Duration
 }
 
-func fanOut(ctx context.Context, leaves []*leafClient, req *pb.SearchRequest, cfg *Config) ([]*pb.SearchResult, error) {
+func fanOut(ctx context.Context, tracer trace.Tracer, leaves []*leafClient, req *pb.SearchRequest, cfg *Config) ([]*pb.SearchResult, error) {
+	ctx, span := tracer.Start(ctx, "root.fanout",
+		trace.WithAttributes(attribute.Int("fan_out", len(leaves))))
+	defer span.End()
+
 	ch := make(chan leafResult, len(leaves))
 	var wg sync.WaitGroup
 	for _, lc := range leaves {
@@ -67,14 +73,16 @@ func fanOut(ctx context.Context, leaves []*leafClient, req *pb.SearchRequest, cf
 	for r := range ch {
 		if r.err != nil {
 			errCount++
-			log.Printf("leaf %s: %v (req=%s)", r.leaf, r.err, req.RequestId)
+			span.AddEvent("leaf_error", trace.WithAttributes(
+				attribute.String("leaf", r.leaf),
+				attribute.String("error", r.err.Error()),
+			))
+			log.Printf("leaf %s: %v", r.leaf, r.err)
 			continue
 		}
 		all = append(all, r.results...)
 	}
-	if errCount > 0 {
-		log.Printf("fanout: %d/%d errors (req=%s)", errCount, len(leaves), req.RequestId)
-	}
+	_ = errCount
 	return topK(all, int(req.TopK)), nil
 }
 
