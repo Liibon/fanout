@@ -56,6 +56,7 @@ func fanOut(ctx context.Context, tracer trace.Tracer, leaves []*leafClient, req 
 			r := leafResult{leaf: lc.addr, latency: time.Since(start)}
 			if err != nil {
 				r.err = err
+				leafTimeouts.WithLabelValues(lc.addr).Inc()
 			} else {
 				for _, res := range resp.Results {
 					if res.VectorId >= 0 {
@@ -73,7 +74,7 @@ func fanOut(ctx context.Context, tracer trace.Tracer, leaves []*leafClient, req 
 	for r := range ch {
 		if r.err != nil {
 			errCount++
-			span.AddEvent("leaf_error", trace.WithAttributes(
+			span.AddEvent("leaf_timeout", trace.WithAttributes(
 				attribute.String("leaf", r.leaf),
 				attribute.String("error", r.err.Error()),
 			))
@@ -82,7 +83,7 @@ func fanOut(ctx context.Context, tracer trace.Tracer, leaves []*leafClient, req 
 		}
 		all = append(all, r.results...)
 	}
-	_ = errCount
+	leafErrorsTotal.Add(float64(errCount))
 	return topK(all, int(req.TopK)), nil
 }
 
