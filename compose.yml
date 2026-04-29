@@ -1,58 +1,304 @@
 x-leaf: &leaf
-  build: { context: ., dockerfile: leaf/Dockerfile }
-  environment: [DATASET_PATH=/data/dataset.bin, NUM_VECTORS=1000000, NUM_LEAVES=16, DIM=128]
-  volumes: [dataset:/data]
+  build:
+    context: .
+    dockerfile: leaf/Dockerfile
+  restart: unless-stopped
+  environment:
+    - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+    - DATASET_PATH=/data/dataset.bin
+    - NUM_VECTORS=${NUM_VECTORS:-1000000}
+    - NUM_LEAVES=${FAN_OUT:-16}
+    - DIM=${DIM:-128}
+    - SYNTHETIC=${SYNTHETIC:-false}
+    - SYNTHETIC_MU=${SYNTHETIC_MU:-2.5}
+    - SYNTHETIC_SIGMA=${SYNTHETIC_SIGMA:-0.6}
+    - SYNTHETIC_HEAVY_PCT=${SYNTHETIC_HEAVY_PCT:-0.01}
+    - SYNTHETIC_HEAVY_MU=${SYNTHETIC_HEAVY_MU:-5.0}
+    - SYNTHETIC_HEAVY_SIGMA=${SYNTHETIC_HEAVY_SIGMA:-0.3}
+  volumes:
+    - dataset:/data
+  depends_on:
+    dataset-gen:
+      condition: service_completed_successfully
+    otel-collector:
+      condition: service_started
 
 services:
-  dataset-gen:
-    build: { context: ., dockerfile: dataset/Dockerfile }
-    command: ["-n=1000000", "-dim=128", "-seed=42", "-out=/data/dataset.bin"]
-    volumes: [dataset:/data]
 
-  leaf-0:  { <<: *leaf, environment: [LEAF_ID=0,  DATASET_PATH=/data/dataset.bin, NUM_VECTORS=1000000, NUM_LEAVES=16, DIM=128] }
-  leaf-1:  { <<: *leaf, environment: [LEAF_ID=1,  DATASET_PATH=/data/dataset.bin, NUM_VECTORS=1000000, NUM_LEAVES=16, DIM=128] }
-  leaf-2:  { <<: *leaf, environment: [LEAF_ID=2,  DATASET_PATH=/data/dataset.bin, NUM_VECTORS=1000000, NUM_LEAVES=16, DIM=128] }
-  leaf-3:  { <<: *leaf, environment: [LEAF_ID=3,  DATASET_PATH=/data/dataset.bin, NUM_VECTORS=1000000, NUM_LEAVES=16, DIM=128] }
-  leaf-4:  { <<: *leaf, environment: [LEAF_ID=4,  DATASET_PATH=/data/dataset.bin, NUM_VECTORS=1000000, NUM_LEAVES=16, DIM=128] }
-  leaf-5:  { <<: *leaf, environment: [LEAF_ID=5,  DATASET_PATH=/data/dataset.bin, NUM_VECTORS=1000000, NUM_LEAVES=16, DIM=128] }
-  leaf-6:  { <<: *leaf, environment: [LEAF_ID=6,  DATASET_PATH=/data/dataset.bin, NUM_VECTORS=1000000, NUM_LEAVES=16, DIM=128] }
-  leaf-7:  { <<: *leaf, environment: [LEAF_ID=7,  DATASET_PATH=/data/dataset.bin, NUM_VECTORS=1000000, NUM_LEAVES=16, DIM=128] }
-  leaf-8:  { <<: *leaf, environment: [LEAF_ID=8,  DATASET_PATH=/data/dataset.bin, NUM_VECTORS=1000000, NUM_LEAVES=16, DIM=128] }
-  leaf-9:  { <<: *leaf, environment: [LEAF_ID=9,  DATASET_PATH=/data/dataset.bin, NUM_VECTORS=1000000, NUM_LEAVES=16, DIM=128] }
-  leaf-10: { <<: *leaf, environment: [LEAF_ID=10, DATASET_PATH=/data/dataset.bin, NUM_VECTORS=1000000, NUM_LEAVES=16, DIM=128] }
-  leaf-11: { <<: *leaf, environment: [LEAF_ID=11, DATASET_PATH=/data/dataset.bin, NUM_VECTORS=1000000, NUM_LEAVES=16, DIM=128] }
-  leaf-12: { <<: *leaf, environment: [LEAF_ID=12, DATASET_PATH=/data/dataset.bin, NUM_VECTORS=1000000, NUM_LEAVES=16, DIM=128] }
-  leaf-13: { <<: *leaf, environment: [LEAF_ID=13, DATASET_PATH=/data/dataset.bin, NUM_VECTORS=1000000, NUM_LEAVES=16, DIM=128] }
-  leaf-14: { <<: *leaf, environment: [LEAF_ID=14, DATASET_PATH=/data/dataset.bin, NUM_VECTORS=1000000, NUM_LEAVES=16, DIM=128] }
-  leaf-15: { <<: *leaf, environment: [LEAF_ID=15, DATASET_PATH=/data/dataset.bin, NUM_VECTORS=1000000, NUM_LEAVES=16, DIM=128] }
-
-  root:
-    build: { context: ., dockerfile: root/Dockerfile }
-    environment:
-      - LEAF_ADDRS=leaf-0:50051,leaf-1:50051,leaf-2:50051,leaf-3:50051,leaf-4:50051,leaf-5:50051,leaf-6:50051,leaf-7:50051,leaf-8:50051,leaf-9:50051,leaf-10:50051,leaf-11:50051,leaf-12:50051,leaf-13:50051,leaf-14:50051,leaf-15:50051
-      - FAN_OUT=16
-      - TOP_K=10
-      - PER_LEAF_TIMEOUT_MS=100
-    restart: unless-stopped
-    ports: ["50051:50051"]
-    depends_on: [leaf-0,leaf-1,leaf-2,leaf-3,leaf-4,leaf-5,leaf-6,leaf-7,leaf-8,leaf-9,leaf-10,leaf-11,leaf-12,leaf-13,leaf-14,leaf-15]
-
-volumes:
-  dataset:
+  # ── infrastructure ────────────────────────────────────────────────────────
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.96.0
     command: ["--config=/etc/otel/config.yaml"]
-    volumes: [./otel/config.yaml:/etc/otel/config.yaml:ro]
-    ports: ["4317:4317", "4318:4318", "8889:8889"]
+    volumes:
+      - ./otel/config.yaml:/etc/otel/config.yaml:ro
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "8889:8889"   # Prometheus scrape endpoint
 
   jaeger:
     image: jaegertracing/all-in-one:1.55.0
-    ports: ["16686:16686", "14250:14250"]
-    environment: [COLLECTOR_OTLP_ENABLED=true]
+    ports:
+      - "16686:16686"  # UI
+      - "14250:14250"  # gRPC (from otel-collector)
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
 
   prometheus:
     image: prom/prometheus:v2.50.1
-    command: ['--config.file=/etc/prometheus/prometheus.yml', '--storage.tsdb.retention.time=1h']
-    volumes: [./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro]
-    ports: ["9090:9090"]
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=1h'
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  # ── dataset generation (one-shot) ─────────────────────────────────────────
+
+  dataset-gen:
+    build:
+      context: .
+      dockerfile: dataset/Dockerfile
+    command:
+      - "-n=${NUM_VECTORS:-1000000}"
+      - "-dim=${DIM:-128}"
+      - "-seed=42"
+      - "-out=/data/dataset.bin"
+    volumes:
+      - dataset:/data
+
+  # ── leaf services (16 shards) ─────────────────────────────────────────────
+
+  leaf-0:
+    <<: *leaf
+    environment:
+      - LEAF_ID=0
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - DATASET_PATH=/data/dataset.bin
+      - NUM_VECTORS=${NUM_VECTORS:-1000000}
+      - NUM_LEAVES=${FAN_OUT:-16}
+      - DIM=${DIM:-128}
+      - SYNTHETIC=${SYNTHETIC:-false}
+      - SYNTHETIC_MU=${SYNTHETIC_MU:-2.5}
+      - SYNTHETIC_SIGMA=${SYNTHETIC_SIGMA:-0.6}
+      - SYNTHETIC_HEAVY_PCT=${SYNTHETIC_HEAVY_PCT:-0.01}
+      - SYNTHETIC_HEAVY_MU=${SYNTHETIC_HEAVY_MU:-5.0}
+      - SYNTHETIC_HEAVY_SIGMA=${SYNTHETIC_HEAVY_SIGMA:-0.3}
+  leaf-1:
+    <<: *leaf
+    environment:
+      - LEAF_ID=1
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - DATASET_PATH=/data/dataset.bin
+      - NUM_VECTORS=${NUM_VECTORS:-1000000}
+      - NUM_LEAVES=${FAN_OUT:-16}
+      - DIM=${DIM:-128}
+      - SYNTHETIC=${SYNTHETIC:-false}
+      - SYNTHETIC_MU=${SYNTHETIC_MU:-2.5}
+      - SYNTHETIC_SIGMA=${SYNTHETIC_SIGMA:-0.6}
+      - SYNTHETIC_HEAVY_PCT=${SYNTHETIC_HEAVY_PCT:-0.01}
+      - SYNTHETIC_HEAVY_MU=${SYNTHETIC_HEAVY_MU:-5.0}
+      - SYNTHETIC_HEAVY_SIGMA=${SYNTHETIC_HEAVY_SIGMA:-0.3}
+  leaf-2:
+    <<: *leaf
+    environment:
+      - LEAF_ID=2
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - DATASET_PATH=/data/dataset.bin
+      - NUM_VECTORS=${NUM_VECTORS:-1000000}
+      - NUM_LEAVES=${FAN_OUT:-16}
+      - DIM=${DIM:-128}
+      - SYNTHETIC=${SYNTHETIC:-false}
+  leaf-3:
+    <<: *leaf
+    environment:
+      - LEAF_ID=3
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - DATASET_PATH=/data/dataset.bin
+      - NUM_VECTORS=${NUM_VECTORS:-1000000}
+      - NUM_LEAVES=${FAN_OUT:-16}
+      - DIM=${DIM:-128}
+      - SYNTHETIC=${SYNTHETIC:-false}
+  leaf-4:
+    <<: *leaf
+    environment:
+      - LEAF_ID=4
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - DATASET_PATH=/data/dataset.bin
+      - NUM_VECTORS=${NUM_VECTORS:-1000000}
+      - NUM_LEAVES=${FAN_OUT:-16}
+      - DIM=${DIM:-128}
+      - SYNTHETIC=${SYNTHETIC:-false}
+  leaf-5:
+    <<: *leaf
+    environment:
+      - LEAF_ID=5
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - DATASET_PATH=/data/dataset.bin
+      - NUM_VECTORS=${NUM_VECTORS:-1000000}
+      - NUM_LEAVES=${FAN_OUT:-16}
+      - DIM=${DIM:-128}
+      - SYNTHETIC=${SYNTHETIC:-false}
+  leaf-6:
+    <<: *leaf
+    environment:
+      - LEAF_ID=6
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - DATASET_PATH=/data/dataset.bin
+      - NUM_VECTORS=${NUM_VECTORS:-1000000}
+      - NUM_LEAVES=${FAN_OUT:-16}
+      - DIM=${DIM:-128}
+      - SYNTHETIC=${SYNTHETIC:-false}
+  leaf-7:
+    <<: *leaf
+    environment:
+      - LEAF_ID=7
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - DATASET_PATH=/data/dataset.bin
+      - NUM_VECTORS=${NUM_VECTORS:-1000000}
+      - NUM_LEAVES=${FAN_OUT:-16}
+      - DIM=${DIM:-128}
+      - SYNTHETIC=${SYNTHETIC:-false}
+  leaf-8:
+    <<: *leaf
+    environment:
+      - LEAF_ID=8
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - DATASET_PATH=/data/dataset.bin
+      - NUM_VECTORS=${NUM_VECTORS:-1000000}
+      - NUM_LEAVES=${FAN_OUT:-16}
+      - DIM=${DIM:-128}
+      - SYNTHETIC=${SYNTHETIC:-false}
+  leaf-9:
+    <<: *leaf
+    environment:
+      - LEAF_ID=9
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - DATASET_PATH=/data/dataset.bin
+      - NUM_VECTORS=${NUM_VECTORS:-1000000}
+      - NUM_LEAVES=${FAN_OUT:-16}
+      - DIM=${DIM:-128}
+      - SYNTHETIC=${SYNTHETIC:-false}
+  leaf-10:
+    <<: *leaf
+    environment:
+      - LEAF_ID=10
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - DATASET_PATH=/data/dataset.bin
+      - NUM_VECTORS=${NUM_VECTORS:-1000000}
+      - NUM_LEAVES=${FAN_OUT:-16}
+      - DIM=${DIM:-128}
+      - SYNTHETIC=${SYNTHETIC:-false}
+  leaf-11:
+    <<: *leaf
+    environment:
+      - LEAF_ID=11
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - DATASET_PATH=/data/dataset.bin
+      - NUM_VECTORS=${NUM_VECTORS:-1000000}
+      - NUM_LEAVES=${FAN_OUT:-16}
+      - DIM=${DIM:-128}
+      - SYNTHETIC=${SYNTHETIC:-false}
+  leaf-12:
+    <<: *leaf
+    environment:
+      - LEAF_ID=12
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - DATASET_PATH=/data/dataset.bin
+      - NUM_VECTORS=${NUM_VECTORS:-1000000}
+      - NUM_LEAVES=${FAN_OUT:-16}
+      - DIM=${DIM:-128}
+      - SYNTHETIC=${SYNTHETIC:-false}
+  leaf-13:
+    <<: *leaf
+    environment:
+      - LEAF_ID=13
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - DATASET_PATH=/data/dataset.bin
+      - NUM_VECTORS=${NUM_VECTORS:-1000000}
+      - NUM_LEAVES=${FAN_OUT:-16}
+      - DIM=${DIM:-128}
+      - SYNTHETIC=${SYNTHETIC:-false}
+  leaf-14:
+    <<: *leaf
+    environment:
+      - LEAF_ID=14
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - DATASET_PATH=/data/dataset.bin
+      - NUM_VECTORS=${NUM_VECTORS:-1000000}
+      - NUM_LEAVES=${FAN_OUT:-16}
+      - DIM=${DIM:-128}
+      - SYNTHETIC=${SYNTHETIC:-false}
+  leaf-15:
+    <<: *leaf
+    environment:
+      - LEAF_ID=15
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - DATASET_PATH=/data/dataset.bin
+      - NUM_VECTORS=${NUM_VECTORS:-1000000}
+      - NUM_LEAVES=${FAN_OUT:-16}
+      - DIM=${DIM:-128}
+      - SYNTHETIC=${SYNTHETIC:-false}
+
+  # ── root ──────────────────────────────────────────────────────────────────
+
+  root:
+    build:
+      context: .
+      dockerfile: root/Dockerfile
+    restart: unless-stopped
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - FAN_OUT=${FAN_OUT:-16}
+      - TOP_K=${TOP_K:-10}
+      - PER_LEAF_TIMEOUT_MS=${PER_LEAF_TIMEOUT_MS:-100}
+      - HEDGING=${HEDGING:-false}
+      - HEDGING_DELAY_MS=${HEDGING_DELAY_MS:-20}
+      - RETRY=${RETRY:-false}
+      - MAX_RETRIES=${MAX_RETRIES:-1}
+      - LEAF_ADDRS=leaf-0:50051,leaf-1:50051,leaf-2:50051,leaf-3:50051,leaf-4:50051,leaf-5:50051,leaf-6:50051,leaf-7:50051,leaf-8:50051,leaf-9:50051,leaf-10:50051,leaf-11:50051,leaf-12:50051,leaf-13:50051,leaf-14:50051,leaf-15:50051
+    ports:
+      - "50051:50051"
+      - "9102:9102"
+    depends_on:
+      - leaf-0
+      - leaf-1
+      - leaf-2
+      - leaf-3
+      - leaf-4
+      - leaf-5
+      - leaf-6
+      - leaf-7
+      - leaf-8
+      - leaf-9
+      - leaf-10
+      - leaf-11
+      - leaf-12
+      - leaf-13
+      - leaf-14
+      - leaf-15
+      - otel-collector
+
+  # ── load generator (runs once, use docker compose run loadgen for custom runs) ──
+
+  loadgen:
+    build:
+      context: .
+      dockerfile: loadgen/Dockerfile
+    profiles: ["loadgen"]
+    environment:
+      - ROOT_ADDR=root:50051
+    command:
+      - "-root=root:50051"
+      - "-qps=${QPS:-100}"
+      - "-warmup=500"
+      - "-measure=5000"
+      - "-dim=${DIM:-128}"
+      - "-top-k=${TOP_K:-10}"
+    depends_on:
+      - root
+
+volumes:
+  dataset:
