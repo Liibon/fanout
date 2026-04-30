@@ -31,14 +31,17 @@ func (s *hdSearchServer) Search(ctx context.Context, req *pb.SearchRequest) (*pb
 	results, err := fanOut(ctx, s.tracer, leaves, req, s.cfg)
 
 	elapsed := time.Since(start)
+	requestDuration.Observe(elapsed.Seconds())
+	requestsTotal.Inc()
 
 	if err != nil {
+		requestErrors.Inc()
 		return nil, err
 	}
 
 	return &pb.SearchResponse{
-		Results:        results,
+		Results:       results,
 		RespondingLeaf: "root",
-		LatencyUs:      elapsed.Microseconds(),
+		LatencyUs:     elapsed.Microseconds(),
 	}, nil
 }
