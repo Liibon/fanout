@@ -1,0 +1,23 @@
+groups:
+  - name: fanout
+    rules:
+      - alert: LeafP99HighLatency
+        expr: histogram_quantile(0.99, rate(usuite_leaf_search_duration_seconds_bucket[1m])) > 0.5
+        for: 30s
+        labels: { severity: warning }
+        annotations:
+          summary: "Leaf p99 > 500ms ({{ $labels.instance }})"
+
+      - alert: RootP99HighLatency
+        expr: histogram_quantile(0.99, rate(usuite_root_request_duration_seconds_bucket[1m])) > 1.0
+        for: 30s
+        labels: { severity: critical }
+        annotations:
+          summary: "Root p99 > 1s — incast degradation"
+
+      - alert: LeafTimeoutsIncreasing
+        expr: rate(usuite_root_leaf_timeouts_total[1m]) > 0.05
+        for: 30s
+        labels: { severity: warning }
+        annotations:
+          summary: "Leaf timeouts > 5% of requests"
