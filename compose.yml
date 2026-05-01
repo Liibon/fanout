@@ -261,7 +261,7 @@ services:
       - LEAF_ADDRS=leaf-0:50051,leaf-1:50051,leaf-2:50051,leaf-3:50051,leaf-4:50051,leaf-5:50051,leaf-6:50051,leaf-7:50051,leaf-8:50051,leaf-9:50051,leaf-10:50051,leaf-11:50051,leaf-12:50051,leaf-13:50051,leaf-14:50051,leaf-15:50051
     ports:
       - "50051:50051"
-      - "9102:9102"
+      - "9102:9102"   # Prometheus metrics
     depends_on:
       - leaf-0
       - leaf-1
