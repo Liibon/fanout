@@ -172,6 +172,7 @@ func printResults(latencies []time.Duration, achievedQPS, targetQPS float64, val
 	fmt.Printf("qps_achieved: %.1f\n", achievedQPS)
 	fmt.Printf("p50:          %v\n", pct(50).Round(time.Microsecond))
 	fmt.Printf("p90:          %v\n", pct(90).Round(time.Microsecond))
+	fmt.Printf("p95:          %v\n", pct(95).Round(time.Microsecond))
 	fmt.Printf("p99:          %v\n", pct(99).Round(time.Microsecond))
 	fmt.Printf("p99.9:        %v\n", pct(99.9).Round(time.Microsecond))
 	fmt.Printf("max:          %v\n", latencies[n-1].Round(time.Microsecond))
