@@ -34,3 +34,9 @@ tidy:
 
 clean:
 	rm -f /tmp/root-svc /tmp/loadgen /tmp/dataset-gen
+
+demo: ## run the two-phase incast demo
+	./demo-incast.sh
+
+bench: ## run loadgen at 200 QPS for 10k requests
+	docker compose run --rm loadgen -qps=200 -measure=10000
