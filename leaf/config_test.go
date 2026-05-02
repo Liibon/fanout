@@ -34,3 +34,10 @@ func TestShardOffset(t *testing.T) {
 		}
 	}
 }
+
+func TestConfigListenAddr(t *testing.T) {
+	cfg, _ := configFromEnv()
+	if cfg.ListenAddr == "" {
+		t.Error("ListenAddr must not be empty")
+	}
+}
