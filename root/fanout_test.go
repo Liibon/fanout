@@ -25,3 +25,15 @@ func TestTopKFewerThanK(t *testing.T) {
 func TestTopKEmpty(t *testing.T) {
 	if len(topK(nil, 5)) != 0 { t.Fatal("want empty") }
 }
+
+func TestTopKEqualDistances(t *testing.T) {
+	results := []*pb.SearchResult{
+		{VectorId: 10, Distance: 1.0},
+		{VectorId: 20, Distance: 1.0},
+		{VectorId: 30, Distance: 1.0},
+	}
+	got := topK(results, 2)
+	if len(got) != 2 {
+		t.Fatalf("want 2, got %d", len(got))
+	}
+}
