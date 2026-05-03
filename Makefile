@@ -40,3 +40,6 @@ demo: ## run the two-phase incast demo
 
 bench: ## run loadgen at 200 QPS for 10k requests
 	docker compose run --rm loadgen -qps=200 -measure=10000
+
+teardown: ## stop the stack and remove the dataset volume
+	./scripts/teardown.sh
