@@ -36,6 +36,7 @@ func main() {
 	dim := flag.Int("dim", 128, "query vector dimension")
 	topK := flag.Int("top-k", 10, "top-K to request")
 	seed := flag.Int64("seed", 7, "RNG seed for query vectors")
+	jsonOut := flag.Bool("json", false, "emit JSON summary instead of text")
 	flag.Parse()
 
 	conn, err := grpc.NewClient(*rootAddr,
