@@ -1,0 +1,22 @@
+{
+  "title": "fanout / HDSearch",
+  "uid": "fanout",
+  "version": 1,
+  "panels": [
+    {
+      "title": "Root p50/p99 Latency (ms)",
+      "type": "graph",
+      "targets": [
+        {"expr": "histogram_quantile(0.50, rate(usuite_root_request_duration_seconds_bucket[1m]))*1000", "legendFormat": "p50"},
+        {"expr": "histogram_quantile(0.99, rate(usuite_root_request_duration_seconds_bucket[1m]))*1000", "legendFormat": "p99"}
+      ]
+    },
+    {
+      "title": "Leaf Timeouts / sec",
+      "type": "graph",
+      "targets": [
+        {"expr": "rate(usuite_root_leaf_timeouts_total[1m])", "legendFormat": "{{leaf}}"}
+      ]
+    }
+  ]
+}
