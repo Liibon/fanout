@@ -37,3 +37,14 @@ func TestTopKEqualDistances(t *testing.T) {
 		t.Fatalf("want 2, got %d", len(got))
 	}
 }
+
+func TestTopKAllSameDistance(t *testing.T) {
+	var results []*pb.SearchResult
+	for i := 0; i < 20; i++ {
+		results = append(results, &pb.SearchResult{VectorId: int64(i), Distance: 0.5})
+	}
+	got := topK(results, 5)
+	if len(got) != 5 {
+		t.Fatalf("want 5, got %d", len(got))
+	}
+}
