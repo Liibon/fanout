@@ -213,3 +213,13 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 MIT. See [LICENSE](LICENSE).
 Portions of the architecture are derived from the fanout paper (Apache 2.0).
 See `LICENSE` for full attribution.
+
+## Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---------|-------------|-----|
+| Leaves exit 127 | `libgomp.so.1` missing | Rebuild after May 13 Dockerfile fix |
+| `libfaiss_c.so: no such file` | cmake doesn't install C API lib | Fixed in May 13 Dockerfile |
+| Dataset-gen exits non-zero | Volume write permission | Ensure `dataset/Dockerfile` uses root distroless |
+| Jaeger shows no traces | OTLP endpoint wrong | Check `OTEL_EXPORTER_OTLP_ENDPOINT` in compose |
+| p99 > 500ms at low QPS | Heavy-tail synthetic mode on | Set `SYNTHETIC_HEAVY_PCT=0` for baseline |
