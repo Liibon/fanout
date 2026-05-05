@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"time"
 	"net"
 	"net/http"
 	"os"
@@ -50,6 +51,7 @@ func main() {
 		log.Fatalf("index init: %v", err)
 	}
 	defer idx.Close()
+	log.Printf("leaf %d: index loaded in %v", cfg.LeafID, time.Since(t0))
 
 	lis, err := net.Listen("tcp", cfg.ListenAddr)
 	if err != nil {
