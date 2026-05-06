@@ -43,3 +43,9 @@ bench: ## run loadgen at 200 QPS for 10k requests
 
 teardown: ## stop the stack and remove the dataset volume
 	./scripts/teardown.sh
+
+stack-check: ## wait until root is ready
+	./scripts/check-stack.sh
+
+clean: ## remove local build artifacts
+	rm -f leaf-svc root-svc
