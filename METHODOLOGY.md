@@ -137,3 +137,11 @@ The load generator discards warmup latencies and does not exclude from the
 tail of the measurement window. The last K% of requests in the measurement
 window are *not* excluded because the open-loop model does not accumulate a
 request backlog at the end the way a closed-loop model does.
+## Measurement Precision
+
+Latency is recorded from the *scheduled* send time, not the actual send time.
+This corrects for coordinated omission: a slow response cannot mask the queue
+latency of requests arriving behind it.
+
+The loadgen drives arrivals as an open-loop Poisson process so service time does
+not affect inter-arrival intervals.
