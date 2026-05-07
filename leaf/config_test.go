@@ -41,3 +41,15 @@ func TestConfigListenAddr(t *testing.T) {
 		t.Error("ListenAddr must not be empty")
 	}
 }
+
+func TestShardOffsetLastLeafRemainder(t *testing.T) {
+	numVectors, numLeaves, leafID := 101, 4, 3
+	sz := numVectors / numLeaves
+	off := leafID * sz
+	if leafID == numLeaves-1 {
+		sz = numVectors - off
+	}
+	if off != 75 || sz != 26 {
+		t.Errorf("off=%d sz=%d, want off=75 sz=26", off, sz)
+	}
+}
