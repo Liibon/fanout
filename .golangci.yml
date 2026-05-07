@@ -1,0 +1,12 @@
+linters:
+  enable:
+    - govet
+    - errcheck
+    - staticcheck
+    - ineffassign
+    - typecheck
+
+run:
+  timeout: 5m
+  skip-dirs:
+    - gen
