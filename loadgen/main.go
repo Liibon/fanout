@@ -79,6 +79,19 @@ func main() {
 	achievedQPS := float64(len(latencies)) / elapsed.Seconds()
 	valid := achievedQPS >= *qps*0.95
 
+	if *jsonOut {
+		sort.Slice(latencies, func(i, j int) bool { return latencies[i] < latencies[j] })
+		n := len(latencies)
+		pct := func(p float64) int64 {
+			idx := int(math.Ceil(p/100*float64(n))) - 1
+			if idx < 0 { idx = 0 }
+			if idx >= n { idx = n - 1 }
+			return latencies[idx].Microseconds()
+		}
+		fmt.Printf(`{"qps_achieved":%.1f,"p50_us":%d,"p95_us":%d,"p99_us":%d,"max_us":%d}`+"\n",
+			achievedQPS, pct(50), pct(95), pct(99), latencies[n-1].Microseconds())
+		return
+	}
 	printResults(latencies, achievedQPS, *qps, valid)
 
 	if !valid {

@@ -3,14 +3,15 @@
 ## [Unreleased]
 
 ### Added
-- Grafana dashboard for root latency and leaf timeout visualization
+- Grafana dashboard (root latency, leaf timeouts)
 - Prometheus alert rules for p99 and timeout thresholds
-- `.env.example` documenting all configuration variables
-- `scripts/bench.sh` QPS sweep, `scripts/teardown.sh`
+- `.env.example` documenting all env vars
+- `scripts/bench.sh`, `scripts/teardown.sh`, `scripts/check-stack.sh`
 - golangci-lint CI integration
-- loadgen `-json` flag for machine-readable output
+- loadgen `-json` flag
+- CHANGELOG, SECURITY.md, Troubleshooting section
 
-## v1.0.0 — 2026-05-15
+## v1.0.0 - 2026-04-29
 
 ### Added
 - 16-shard FAISS-backed HDSearch scatter-gather service

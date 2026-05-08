@@ -13,7 +13,7 @@ groups:
         for: 30s
         labels: { severity: critical }
         annotations:
-          summary: "Root p99 > 1s — incast degradation"
+          summary: "Root p99 > 1s - incast degradation"
 
       - alert: LeafTimeoutsIncreasing
         expr: rate(usuite_root_leaf_timeouts_total[1m]) > 0.05

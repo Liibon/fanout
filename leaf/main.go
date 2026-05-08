@@ -38,6 +38,7 @@ func main() {
 	tracer := otel.Tracer("usuite-leaf")
 
 	// Choose backend.
+	t0 := time.Now()
 	var idx Index
 	if cfg.Synthetic {
 		log.Printf("leaf %d: synthetic mode (mu=%.2f sigma=%.2f heavyPct=%.3f)",
