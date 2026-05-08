@@ -44,6 +44,22 @@ func (s *syntheticIndex) Search(query []float32, k int) ([]int64, []float32, err
 	return ids, dists, nil
 }
 
+func (s *syntheticIndex) SearchByIDs(query []float32, candidateIDs []int64, k int) ([]int64, []float32, error) {
+	delayMs := s.sampleLatencyMs()
+	time.Sleep(time.Duration(delayMs*1e6) * time.Nanosecond)
+
+	if k > len(candidateIDs) {
+		k = len(candidateIDs)
+	}
+	ids := make([]int64, k)
+	dists := make([]float32, k)
+	for i := range ids {
+		ids[i] = candidateIDs[i]
+		dists[i] = s.rng.Float32()
+	}
+	return ids, dists, nil
+}
+
 func (s *syntheticIndex) Close() {}
 
 func (s *syntheticIndex) sampleLatencyMs() float64 {

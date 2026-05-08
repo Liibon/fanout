@@ -28,7 +28,7 @@ func (s *hdSearchServer) Search(ctx context.Context, req *pb.SearchRequest) (*pb
 	defer span.End()
 
 	leaves := s.leaves[:s.cfg.FanOut]
-	results, err := fanOut(ctx, s.tracer, leaves, req, s.cfg)
+	fo, err := fanOut(ctx, s.tracer, leaves, req, s.cfg)
 
 	elapsed := time.Since(start)
 	requestDuration.Observe(elapsed.Seconds())
@@ -40,8 +40,12 @@ func (s *hdSearchServer) Search(ctx context.Context, req *pb.SearchRequest) (*pb
 	}
 
 	return &pb.SearchResponse{
-		Results:       results,
-		RespondingLeaf: "root",
-		LatencyUs:     elapsed.Microseconds(),
+		Results:         fo.results,
+		RespondingLeaf:  "root",
+		LatencyUs:       elapsed.Microseconds(),
+		ShardsQueried:   int32(fo.shardsQueried),
+		ShardsResponded: int32(fo.shardsResponded),
+		IndexUs:         fo.indexUs,
+		MergeUs:         fo.mergeUs,
 	}, nil
 }

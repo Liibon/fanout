@@ -27,7 +27,14 @@ func (s *hdSearchServer) Search(ctx context.Context, req *pb.SearchRequest) (*pb
 		))
 	defer span.End()
 
-	ids, dists, err := s.idx.Search(req.QueryVector, int(req.TopK))
+	var ids []int64
+	var dists []float32
+	var err error
+	if len(req.CandidateIds) > 0 {
+		ids, dists, err = s.idx.SearchByIDs(req.QueryVector, req.CandidateIds, int(req.TopK))
+	} else {
+		ids, dists, err = s.idx.Search(req.QueryVector, int(req.TopK))
+	}
 	elapsed := time.Since(start)
 	leafSearchDuration.Observe(elapsed.Seconds())
 	leafSearchTotal.Inc()

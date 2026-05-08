@@ -16,12 +16,15 @@ import (
 	"io"
 	"log"
 	"os"
+	"sort"
 	"unsafe"
 )
 
 type faissIndex struct {
-	idx *C.FaissIndexFlatL2
-	dim int
+	idx    *C.FaissIndexFlatL2
+	dim    int
+	offset int64     // global base index of this shard's first vector
+	vecs   []float32 // raw shard vectors retained for SearchByIDs exact scoring
 }
 
 // NewFaissIndex builds a flat-L2 FAISS index from the leaf's shard of the dataset.
@@ -84,7 +87,7 @@ func NewFaissIndex(cfg *Config) (Index, error) {
 	}
 
 	log.Printf("leaf %d: FAISS index built (%d vectors, dim=%d)", cfg.LeafID, shardSize, dim)
-	return &faissIndex{idx: idx, dim: dim}, nil
+	return &faissIndex{idx: idx, dim: dim, offset: int64(offset), vecs: vecs}, nil
 }
 
 func (fi *faissIndex) Search(query []float32, k int) ([]int64, []float32, error) {
@@ -102,7 +105,55 @@ func (fi *faissIndex) Search(query []float32, k int) ([]int64, []float32, error)
 	if rc != 0 {
 		return nil, nil, fmt.Errorf("faiss_Index_search returned %d", rc)
 	}
+	// Translate local shard labels to global dataset IDs.
+	// FAISS returns -1 for unfilled slots when k > shard size.
+	for i, l := range labels {
+		if l >= 0 {
+			labels[i] = l + fi.offset
+		}
+	}
 	return labels, distances, nil
+}
+
+// SearchByIDs computes exact L2 distances from query to each candidate ID,
+// translating global IDs to local shard positions. Candidates outside this
+// shard's range are silently skipped. Returned IDs are global.
+func (fi *faissIndex) SearchByIDs(query []float32, candidateIDs []int64, k int) ([]int64, []float32, error) {
+	type pair struct {
+		id   int64
+		dist float32
+	}
+	pairs := make([]pair, 0, len(candidateIDs))
+	shardSize := int64(len(fi.vecs)) / int64(fi.dim)
+	for _, gid := range candidateIDs {
+		lid := gid - fi.offset
+		if lid < 0 || lid >= shardSize {
+			continue
+		}
+		base := lid * int64(fi.dim)
+		vec := fi.vecs[base : base+int64(fi.dim)]
+		pairs = append(pairs, pair{gid, l2sq(query, vec)})
+	}
+	sort.Slice(pairs, func(i, j int) bool { return pairs[i].dist < pairs[j].dist })
+	if k > len(pairs) {
+		k = len(pairs)
+	}
+	ids := make([]int64, k)
+	dists := make([]float32, k)
+	for i := 0; i < k; i++ {
+		ids[i] = pairs[i].id
+		dists[i] = pairs[i].dist
+	}
+	return ids, dists, nil
+}
+
+func l2sq(a, b []float32) float32 {
+	var s float32
+	for i := range a {
+		d := a[i] - b[i]
+		s += d * d
+	}
+	return s
 }
 
 func (fi *faissIndex) Close() {

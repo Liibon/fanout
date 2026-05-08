@@ -9,9 +9,10 @@ service HDSearch {
 }
 
 message SearchRequest {
-  repeated float query_vector = 1;
-  int32          top_k        = 2;
-  string         request_id   = 3;
+  repeated float query_vector  = 1;
+  int32          top_k         = 2;
+  string         request_id    = 3;
+  repeated int64 candidate_ids = 4; // if non-empty, leaf scores only these global IDs
 }
 
 message SearchResult {
@@ -20,7 +21,11 @@ message SearchResult {
 }
 
 message SearchResponse {
-  repeated SearchResult results        = 1;
-  string                responding_leaf = 2;
-  int64                 latency_us      = 3;
+  repeated SearchResult results          = 1;
+  string                responding_leaf  = 2;
+  int64                 latency_us       = 3;
+  int32                 shards_queried   = 4;
+  int32                 shards_responded = 5;
+  int64                 index_us         = 6; // root: candidate-generation time
+  int64                 merge_us         = 7; // root: top-K merge time
 }

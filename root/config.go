@@ -15,11 +15,17 @@ type Config struct {
 	LeafAddrs       []string
 	FanOut          int
 	TopK            int
+	NumVectors      int
 	PerLeafTimeout  time.Duration
 	HedgingEnabled  bool
 	HedgingDelay    time.Duration
 	RetryEnabled    bool
 	MaxRetries      int
+	// NumCandidates controls how many candidate IDs the root sends to each leaf.
+	// 0 (default) means full-shard search. When > 0 the root generates a
+	// candidate list per leaf (query-seeded random window) and the leaf scores
+	// only those IDs — equivalent to MicroSuite's FIXEDCOMP / PercentDataSent knob.
+	NumCandidates int
 }
 
 func configFromEnv() (*Config, error) {
@@ -29,11 +35,13 @@ func configFromEnv() (*Config, error) {
 		OtelEndpoint:   getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:4318"),
 		TopK:           10,
 		FanOut:         16,
+		NumVectors:     1_000_000,
 		PerLeafTimeout: 100 * time.Millisecond,
 		HedgingEnabled: false,
 		HedgingDelay:   20 * time.Millisecond,
 		RetryEnabled:   false,
 		MaxRetries:     1,
+		NumCandidates:  0,
 	}
 
 	if s := os.Getenv("LEAF_ADDRS"); s != "" {
@@ -79,6 +87,13 @@ func configFromEnv() (*Config, error) {
 			return nil, fmt.Errorf("MAX_RETRIES: %w", err)
 		}
 		c.MaxRetries = v
+	}
+	if s := os.Getenv("NUM_CANDIDATES"); s != "" {
+		v, err := strconv.Atoi(s)
+		if err != nil {
+			return nil, fmt.Errorf("NUM_CANDIDATES: %w", err)
+		}
+		c.NumCandidates = v
 	}
 
 	if c.FanOut > len(c.LeafAddrs) {
