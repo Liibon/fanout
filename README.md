@@ -214,6 +214,13 @@ MIT. See [LICENSE](LICENSE).
 Portions of the architecture are derived from the fanout paper (Apache 2.0).
 See `LICENSE` for full attribution.
 
+
+### Grafana
+
+After `docker compose up`, open [http://localhost:3000](http://localhost:3000)
+(anonymous access, no password). The **fanout / HDSearch** dashboard shows root
+p50/p99 latency and per-leaf timeout rate live.
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |
