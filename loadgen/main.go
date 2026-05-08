@@ -109,40 +109,45 @@ func runPhase(
 	interArrival time.Duration,
 	record bool,
 ) []time.Duration {
-	latencies := make([]time.Duration, 0, n)
+	done := make(chan time.Duration, n)
 	next := time.Now()
 
 	for i := 0; i < n; i++ {
-		scheduleTime := next
-		now := time.Now()
-		if scheduleTime.After(now) {
-			time.Sleep(scheduleTime.Sub(now))
+		scheduledAt := next
+		if sleep := time.Until(scheduledAt); sleep > 0 {
+			time.Sleep(sleep)
 		}
 
 		query := randomVector(rng, dim)
 		reqID := fmt.Sprintf("lg-%d", i)
 
-		// Latency starts at scheduled time to avoid coordinated omission.
-		t0 := scheduleTime
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		_, err := client.Search(ctx, &pb.SearchRequest{
-			QueryVector: query,
-			TopK:        int32(topK),
-			RequestId:   reqID,
-		})
-		cancel()
-		latency := time.Since(t0)
+		// Fire request in its own goroutine so the dispatch loop is never
+		// blocked by service time. Latency is measured from scheduledAt
+		// (not actual dispatch) to avoid coordinated omission.
+		go func(at time.Time, q []float32, id string) {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			_, err := client.Search(ctx, &pb.SearchRequest{
+				QueryVector: q,
+				TopK:        int32(topK),
+				RequestId:   id,
+			})
+			lat := time.Since(at)
+			if err != nil {
+				lat = 2 * time.Second
+			}
+			done <- lat
+		}(scheduledAt, query, reqID)
 
-		if err != nil {
-			// Count timeout as full 2-second latency to expose tail.
-			latency = 2 * time.Second
+		next = scheduledAt.Add(poissonInterval(rng, interArrival))
+	}
+
+	// Wait for every in-flight request to complete.
+	latencies := make([]time.Duration, 0, n)
+	for i := 0; i < n; i++ {
+		if lat := <-done; record {
+			latencies = append(latencies, lat)
 		}
-
-		if record {
-			latencies = append(latencies, latency)
-		}
-
-		next = scheduleTime.Add(poissonInterval(rng, interArrival))
 	}
 	return latencies
 }
