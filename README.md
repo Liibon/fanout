@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/fanout.png" alt="fanout" width="160" />
+</p>
+
 # fanout / HDSearch
 
 ```bash
