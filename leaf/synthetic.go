@@ -3,6 +3,7 @@ package main
 import (
 	"math"
 	"math/rand"
+	"sync"
 	"time"
 )
 
@@ -11,12 +12,16 @@ import (
 // A heavy-tail mixture models GC pauses and stragglers:
 //
 //	with probability HeavyPct, draw from lognormal(HeavyMu, HeavySigma) instead.
+//
+// gRPC handlers run concurrently, so rng must be guarded; *rand.Rand is not
+// safe for concurrent use.
 type syntheticIndex struct {
 	mu         float64
 	sigma      float64
 	heavyPct   float64
 	heavyMu    float64
 	heavySigma float64
+	rngMu      sync.Mutex
 	rng        *rand.Rand
 }
 
@@ -37,10 +42,12 @@ func (s *syntheticIndex) Search(query []float32, k int) ([]int64, []float32, err
 
 	ids := make([]int64, k)
 	dists := make([]float32, k)
+	s.rngMu.Lock()
 	for i := range ids {
 		ids[i] = s.rng.Int63()
 		dists[i] = s.rng.Float32()
 	}
+	s.rngMu.Unlock()
 	return ids, dists, nil
 }
 
@@ -53,22 +60,22 @@ func (s *syntheticIndex) SearchByIDs(query []float32, candidateIDs []int64, k in
 	}
 	ids := make([]int64, k)
 	dists := make([]float32, k)
+	s.rngMu.Lock()
 	for i := range ids {
 		ids[i] = candidateIDs[i]
 		dists[i] = s.rng.Float32()
 	}
+	s.rngMu.Unlock()
 	return ids, dists, nil
 }
 
 func (s *syntheticIndex) Close() {}
 
 func (s *syntheticIndex) sampleLatencyMs() float64 {
+	s.rngMu.Lock()
+	defer s.rngMu.Unlock()
 	if s.rng.Float64() < s.heavyPct {
-		return lognormal(s.rng, s.heavyMu, s.heavySigma)
+		return math.Exp(s.heavyMu + s.heavySigma*s.rng.NormFloat64())
 	}
-	return lognormal(s.rng, s.mu, s.sigma)
-}
-
-func lognormal(rng *rand.Rand, mu, sigma float64) float64 {
-	return math.Exp(mu + sigma*rng.NormFloat64())
+	return math.Exp(s.mu + s.sigma*s.rng.NormFloat64())
 }

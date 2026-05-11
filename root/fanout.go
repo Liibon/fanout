@@ -1,6 +1,7 @@
 package main
 
 import (
+	"container/heap"
 	"context"
 	"math"
 	"math/rand"
@@ -150,7 +151,7 @@ func fanOut(
 			if err != nil && cfg.RetryEnabled {
 				for i := 0; i < cfg.MaxRetries; i++ {
 					lctx2, cancel2 := context.WithTimeout(ctx, deadline)
-					resp, err = lc.client.Search(lctx2, req)
+					resp, err = lc.client.Search(lctx2, leafReq)
 					cancel2()
 					if err == nil {
 						break
@@ -231,12 +232,45 @@ func fanOut(
 	}, nil
 }
 
+// maxHeap is a max-heap of *SearchResult ordered by Distance descending.
+// We keep a max-heap of size k while scanning N results, then drain into
+// ascending order. This gives O(N log k) instead of sort's O(N log N).
+type maxHeap []*pb.SearchResult
+
+func (h maxHeap) Len() int            { return len(h) }
+func (h maxHeap) Less(i, j int) bool  { return h[i].Distance > h[j].Distance }
+func (h maxHeap) Swap(i, j int)       { h[i], h[j] = h[j], h[i] }
+func (h *maxHeap) Push(x interface{}) { *h = append(*h, x.(*pb.SearchResult)) }
+func (h *maxHeap) Pop() interface{} {
+	old := *h
+	n := len(old)
+	x := old[n-1]
+	*h = old[:n-1]
+	return x
+}
+
 func topK(results []*pb.SearchResult, k int) []*pb.SearchResult {
-	sort.Slice(results, func(i, j int) bool {
-		return results[i].Distance < results[j].Distance
-	})
-	if k > len(results) {
-		k = len(results)
+	if k <= 0 || len(results) == 0 {
+		return nil
 	}
-	return results[:k]
+	if k >= len(results) {
+		sort.Slice(results, func(i, j int) bool {
+			return results[i].Distance < results[j].Distance
+		})
+		return results
+	}
+	h := make(maxHeap, 0, k)
+	for _, r := range results {
+		if h.Len() < k {
+			heap.Push(&h, r)
+		} else if r.Distance < h[0].Distance {
+			h[0] = r
+			heap.Fix(&h, 0)
+		}
+	}
+	out := make([]*pb.SearchResult, k)
+	for i := k - 1; i >= 0; i-- {
+		out[i] = heap.Pop(&h).(*pb.SearchResult)
+	}
+	return out
 }
